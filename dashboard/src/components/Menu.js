@@ -1,17 +1,32 @@
-import React, { useState } from "react";
-
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import SessionManager from "../utils/sessionManager";
 
 const Menu = () => {
   const [selectedMenu, setSelectedMenu] = useState(0);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState({ username: "USERID" });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Get user info from session
+    const session = SessionManager.getSession();
+    if (session && session.userInfo) {
+      setUserInfo(session.userInfo);
+    }
+  }, []);
 
   const handleMenuClick = (index) => {
     setSelectedMenu(index);
   };
 
-  const handleProfileClick = (index) => {
+  const handleProfileClick = () => {
     setIsProfileDropdownOpen(!isProfileDropdownOpen);
+  };
+
+  const handleLogout = () => {
+    SessionManager.clearSession();
+    navigate("/signup");
   };
 
   const menuClass = "menu";
@@ -91,9 +106,18 @@ const Menu = () => {
         </ul>
         <hr />
         <div className="profile" onClick={handleProfileClick}>
-          <div className="avatar">ZU</div>
-          <p className="username">USERID</p>
+          <div className="avatar">
+            {userInfo.username ? userInfo.username.substring(0, 2).toUpperCase() : "ZU"}
+          </div>
+          <p className="username">{userInfo.username || "USERID"}</p>
         </div>
+        {isProfileDropdownOpen && (
+          <div className="profile-dropdown">
+            <button onClick={handleLogout} className="logout-btn">
+              Logout
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

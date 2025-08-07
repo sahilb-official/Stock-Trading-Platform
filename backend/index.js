@@ -4,11 +4,15 @@ const express= require("express");
 const mongoose = require('mongoose');
 const bodyParser=require('body-parser');
 const cors=require("cors");
+const jwt = require('jsonwebtoken');
+const User = require('./Models/UserModel');
 
 
-const {HoldingsModel}=require("./model/HoldingsModel");
-const {PositionModel}=require("./model/PositionModel");
-const {OrdersModel}=require("./model/OrdersModel");
+const {HoldingsModel}=require("./Models/HoldingsModel");
+const {PositionModel}=require("./Models/PositionModel");
+const {OrdersModel}=require("./Models/OrdersModel");
+const cookieParser = require("cookie-parser");
+const authRoute = require("./Routes/AuthRoute");
 
 
 const PORT = process.env.PORT || 3002;
@@ -16,8 +20,84 @@ const uri=process.env.MONGO_URL;
 
 const app=express();
 
-app.use(cors());
+app.use(cors({
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  }));
 app.use(bodyParser.json());
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
+app.use("/", authRoute);
+
+// Add token validation endpoint for dashboard
+app.post('/validate-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(401).json({ valid: false, message: 'No token provided' });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.TOKEN_KEY);
+    const user = await User.findById(decoded.id);
+    
+    if (!user) {
+      return res.status(401).json({ valid: false, message: 'User not found' });
+    }
+
+    res.json({ 
+      valid: true, 
+      user: { 
+        id: user._id, 
+        username: user.username, 
+        email: user.email 
+      } 
+    });
+  } catch (error) {
+    console.error('Token validation error:', error);
+    res.status(401).json({ valid: false, message: 'Invalid token' });
+  }
+});
+
+// Add session refresh endpoint
+app.post('/refresh-session', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(401).json({ valid: false, message: 'No token provided' });
+    }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.TOKEN_KEY);
+    const user = await User.findById(decoded.id);
+    
+    if (!user) {
+      return res.status(401).json({ valid: false, message: 'User not found' });
+    }
+
+    // Create new token with extended expiry
+    const newToken = createSecretToken(user._id);
+    
+    res.json({ 
+      valid: true, 
+      token: newToken,
+      user: { 
+        id: user._id, 
+        username: user.username, 
+        email: user.email 
+      } 
+    });
+  } catch (error) {
+    console.error('Session refresh error:', error);
+    res.status(401).json({ valid: false, message: 'Invalid token' });
+  }
+});
 
 //  app.get("/addholdings",async(req,res)=>{
 //     let tempHoldings=[
@@ -190,6 +270,14 @@ app.use(bodyParser.json());
 // });
 
 
+mongoose
+  .connect(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("MongoDB is  connected successfully"))
+  .catch((err) => console.error(err));
+
 
 app.get('/allHoldings',async(req,res)=>{
     let allHoldings=await HoldingsModel.find({});
@@ -217,5 +305,10 @@ app.post('/newOrder',async(req,res)=>{
 })
 app.listen(PORT ,()=>{
     console.log("App started");
-    mongoose.connect(uri);
+    
 });
+
+
+
+
+
